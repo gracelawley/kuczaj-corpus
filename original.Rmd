@@ -1,0 +1,248 @@
+---
+title: "testing"
+author: "Grace Lawley"
+date: "8/6/2018"
+output: 
+  html_document:
+    theme: "journal"
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading packages
+```{r loading_packages, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(kableExtra)
+library(childesr)
+library(tidytext)
+library(ggridges)
+library(beyonce)
+library(knitr)
+library(here)
+library(egg)
+```
+
+
+The code used to originally gather the data from the CHILDES database (not run)
+```{r childes_db, eval = FALSE}
+kuczaj_raw <- childesr::get_utterances(collection = "Eng-NA",
+                                       corpus = "Kuczaj",
+                                       role = "Target_Child")
+```
+
+The code used to save dataframe as a csv file to ensure reproduciblity in case the database is updated in the future. (not run)
+```{r write_csv, eval = FALSE}
+write_csv(kuczaj_raw, here("data/kuzcaj_raw.csv"))
+```
+
+
+Reading back in the preserved file
+```{r load_csv}
+kuczaj_raw <- read_csv(here("data/kuczaj_raw.csv"))
+```
+
+
+```{r glimpse_raw}
+glimpse(kuczaj_raw)
+```
+
+
+```{r}
+# Rearrange/renaming columns and removing missing utterances
+kuczaj_proc <- kuczaj_raw %>% 
+  select(transcript_id, age_months = target_child_age, utt = gloss) %>% 
+  drop_na(utt) %>% 
+  filter(utt != "") 
+
+
+glimpse(kuczaj_proc)
+```
+
+
+
+Creating a function to process contractions
+```{r}
+# Creating a function to process contractions
+proc_contractions <- function(string) {
+  string <- string %>% 
+    # Expanding the exception cases
+    str_replace_all("\\bwon't\\b", "will not") %>%
+    str_replace_all("\\blet's\\b", "let us") %>% 
+    str_replace_all("\\b(I|i)'m\\b", "i am") %>% 
+    
+    # Mapping both can't & cannot to can not
+    str_replace_all("\\bcan't\\b", "can not") %>% 
+    str_replace_all("\\bcannot\\b", "can not") %>% 
+    
+    
+    # Ambiguous cases
+    str_replace_all("'d\\b", "d") %>% 
+    str_replace_all("'s\\b", "s") %>% 
+    str_replace_all("ain't", "aint") %>%
+    
+     # Collapsing "o'clock" bc the expansion, "of the clock" is uncommon/archaic
+    str_replace_all("\\bo'clock\\b", "oclock") %>% 
+    
+    # Common general cases
+    str_replace_all("n't\\b", " not") %>% 
+    str_replace_all("n'ts\\b", " nots") %>% 
+    str_replace_all("'re\\b", " are") %>% 
+    str_replace_all("'ve\\b", " have") %>% 
+    str_replace_all("'ll\\b", " will") %>% 
+    
+    # Removing any remaining apostrophes
+    str_replace_all("'", "")
+    
+}
+```
+
+Processing utterances
+```{r}
+kuczaj_proc <- kuczaj_proc %>% 
+  # Renaming utt column
+  rename(utt_raw = utt) %>% 
+  
+  # Removing all underscores
+  mutate(utt_proc = str_replace_all(utt_raw, "_", " ")) %>% 
+  
+  # Processing contractions
+  mutate(utt_proc = proc_contractions(utt_proc))  %>% 
+  
+  # Changing all characters to lowercase
+  mutate(utt_proc = str_to_lower(utt_proc))
+```
+
+Number of utterances changed during processing
+```{r}
+kuczaj_proc %>% 
+  count(utt_proc == utt_raw)
+```
+
+
+Converting age from months to years and flooring both `age_months` and `age_years`
+```{r}
+kuczaj_proc <- kuczaj_proc %>% 
+  mutate(age_years = age_months/12) 
+```
+
+
+
+```{r}
+kuczaj_tokens <- kuczaj_proc %>% 
+  select(-utt_raw) %>% 
+  unnest_tokens(output = word, input = utt_proc)
+
+#write_csv(kuczaj_tokens, "data/kuczaj_tokens.csv")
+```
+
+Total number of tokens: `r nrow(tokens)` 
+Total number of types: `r tokens %>% distinct(word) %>% nrow()`
+
+```{r}
+nrc <- tidytext::get_sentiments("nrc")
+
+kuczaj_nrc <- kuczaj_tokens %>% 
+  inner_join(nrc, by = "word")
+
+#write_csv(kuczaj_nrc, "data/kuczaj_nrc.csv")
+```
+
+Number of tokens lost: `r nrow(tokens) - nrow(kuczaj_nrc)`
+Percentage of tokens lost: `r (nrow(tokens) - nrow(kuczaj_nrc))/nrow(tokens)`
+
+
+```{r}
+bing <- tidytext::get_sentiments("bing")
+
+kuczaj_bing <- kuczaj_tokens %>% 
+  inner_join(bing, by = "word")
+
+#write_csv(kuczaj_bing, "data/kuczaj_bing.csv")
+```
+
+Number of tokens lost: `r nrow(tokens) - nrow(kuczaj_bing)`
+Percentage of tokens lost: `r (nrow(tokens) - nrow(kuczaj_bing))/nrow(tokens)`
+
+```{r}
+afinn <- tidytext::get_sentiments("afinn")
+
+kuczaj_afinn <- kuczaj_tokens %>% 
+  inner_join(afinn, by = "word")
+
+#write_csv(kuczaj_afinn, "data/kuczaj_afinn.csv")
+```
+Number of tokens lost: `r nrow(tokens) - nrow(kuczaj_afinn)`
+Percentage of tokens lost: `r (nrow(tokens) - nrow(kuczaj_afinn))/nrow(tokens)`
+
+##!!!
+```{r}
+nrc %>% count(sentiment) %>% arrange(n)
+
+```
+
+
+# Original Plot(s)
+
+## Early draft
+```{r early draft}
+# Making the plot
+kuczaj_nrc %>% 
+  filter(!sentiment %in% c("positive", "negative")) %>% 
+  ggplot(aes(x = age_years, y = sentiment, fill = sentiment)) +
+    geom_density_ridges(alpha = 0.8, show.legend = FALSE) +
+    labs(x = "Age in Years", y = "", title = "Kuczaj Corpus & Sentiment") +
+    scale_y_discrete(expand = c(0.01, 0)) +
+    scale_x_continuous(expand = c(0.01, 0)) +
+    theme_ridges(grid = FALSE) +
+    scale_fill_manual(values = beyonce_palette(64))
+```
+
+
+## Final draft
+```{r plotting}
+# Creating the positive subplot
+positive_plot <- kuczaj_nrc %>% 
+  filter(sentiment %in% c("joy", "trust", "anticipation")) %>% 
+  ggplot(aes(x = age_years, y = sentiment, fill = sentiment)) +
+    geom_density_ridges(alpha = 0.8, show.legend = FALSE) +
+    labs(x = "", y = "", title = "Kuczaj Corpus & Sentiment",
+         subtitle = "\nPositive Sentiments") +
+    scale_y_discrete(expand = c(0.01, 0)) +
+    scale_x_continuous(expand = c(0.01, 0)) +
+    scale_fill_manual(values = c("#F6EFF7", "#D0D1E6", "#A6BDDB")) +
+    theme_ridges(grid = FALSE) +
+    theme(plot.title = element_text(size = 22, hjust = -0.2),
+          plot.subtitle = element_text(size = 18, face = "italic"),
+          axis.text.y = element_text(size = 16, face = "bold.italic"))
+    
+# Creating the negative subplot
+negative_plot <- kuczaj_nrc %>% 
+  filter(sentiment %in% c("anger", "sadness", "fear")) %>% 
+  ggplot(aes(x = age_years, y = sentiment, fill = sentiment)) +
+    geom_density_ridges(alpha = 0.7, show.legend = FALSE) +
+    labs(x = "Age in Years", y = "", title = "",
+         subtitle = "Negative Sentiments") +
+    scale_y_discrete(expand = c(0.01, 0)) +
+    scale_x_continuous(expand = c(0.01, 0)) +
+    scale_fill_manual(values = c("#7999A8", "#1C9099", "#016C59")) +
+    theme_ridges(grid = FALSE) +
+    theme(plot.subtitle = element_text(size = 18, face = "italic"),
+          axis.text.y = element_text(size = 16, face = "bold.italic"))
+
+# Combining into one and plotting
+egg::ggarrange(positive_plot, negative_plot, ncol = 1, nrow = 2)
+```
+
+
+
+
+
+
+
+
+

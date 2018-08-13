@@ -1,0 +1,122 @@
+---
+title: "exploring pos + neg"
+author: "Grace Lawley"
+date: "8/13/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loading packages, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(tidytext)
+library(skimr)
+```
+
+```{r loading data}
+kuczaj_tokens <- read_csv("data/kuczaj_tokens.csv")
+kuczaj_nrc <- read_csv("data/kuczaj_nrc.csv")     
+```
+
+
+```{r}
+exploring <- kuczaj_nrc %>% 
+  select(-word, -transcript_id)
+```
+
+
+```{r}
+exploring2 <- exploring %>% 
+  # filter for only 6 sentiments
+  filter(sentiment %in% c("positive", "negative")) %>% 
+  # add a count for each sentiment per transcript
+  add_count(age_months, sentiment) %>% 
+  rename(n_sentiment = n) %>% 
+  # remove duplicate rows
+  distinct(age_months, sentiment, .keep_all = TRUE) %>% 
+  # add a count for total tokens per transcript
+  group_by(age_months) %>%  
+  mutate(n_tokens = sum(n_sentiment)) %>% 
+  ungroup()
+
+skim(exploring2)
+```
+
+
+```{r}
+# make an auxiliary table with all transcript_id and sentiment combinations to add in zero observations
+all_combos <- exploring2 %>% 
+  tidyr::expand(nesting(age_months, age_years, n_tokens), sentiment)
+
+# joing all_combos with exploring 3 and changing unobserved sentiment counts from NA to 0
+everything3 <- all_combos %>% 
+  left_join(exploring2, by = c("age_months", "age_years", "sentiment", "n_tokens")) %>% 
+  replace_na(list(n_sentiment = 0)) %>% 
+  select(-n_tokens, everything()) %>% 
+  # calculating percents for each sentiment at each age
+  mutate(percentage = n_sentiment/n_tokens)
+
+
+# plotting
+ggplot(everything3, aes(age_months, percentage, color = sentiment)) +
+  geom_point(alpha = 0.7) + 
+  facet_wrap(~sentiment)
+```
+
+
+
+
+# Starting over this time binning ages
+```{r}
+age_binned <- exploring %>% 
+  mutate(age_months = floor(age_months)) %>% 
+  # recomputing new age_years for sanity check and taking the floor
+  mutate(age_years = age_months/12,
+         age_years = floor(age_years))
+
+age_binned2 <- age_binned %>% 
+  # filter for only 6 sentiments
+  filter(sentiment %in% c("positive", "negative")) %>% 
+  # add a count for each sentiment per transcript
+  add_count(age_months, sentiment) %>% 
+  rename(n_sentiment = n) %>% 
+  # remove duplicate rows
+  distinct(age_months, sentiment, .keep_all = TRUE) %>% 
+  # add a count for total tokens per transcript
+  group_by(age_months) %>%  
+  mutate(n_tokens = sum(n_sentiment)) %>% 
+  ungroup()
+
+```
+
+Only missing 2 observations this time! 
+```{r}
+# make an auxiliary table with all transcript_id and sentiment combinations to add in zero observations
+all_combos_pt2 <- age_binned2 %>% 
+  tidyr::expand(nesting(age_months, age_years, n_tokens), sentiment)
+
+# joing all_combos with exploring 3 and changing unobserved sentiment counts from NA to 0
+age_binned3 <- all_combos_pt2 %>% 
+  left_join(age_binned2, by = c("age_months", "age_years", "sentiment", "n_tokens")) %>% 
+  replace_na(list(n_sentiment = 0)) %>% 
+  select(-n_tokens, everything()) %>% 
+  # calculating percents for each sentiment at each age
+  mutate(percentage = n_sentiment/n_tokens)
+```
+
+Remove two tail months? Only 1 transcript for first bin and 2 for the last -- cutoff/incomplete
+```{r}
+age_binned4 <- age_binned3 %>% 
+  filter(age_months != 28 & age_months != 60)
+
+# plotting
+ggplot(age_binned4, aes(age_months, percentage, color = sentiment)) +
+  geom_point(alpha = 0.7) + 
+  geom_line()
+```
+
+
+
+
