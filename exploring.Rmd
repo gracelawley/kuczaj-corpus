@@ -18,7 +18,7 @@ library(skimr)
 ```
 
 ```{r loading data}
-kuczaj_tokens <- read_csv("data/kuczaj_tokens.csv")
+kuczaj_tokens <- read_csv("data/kuczaj_tokens.csv") 
 kuczaj_nrc <- read_csv("data/kuczaj_nrc.csv")     
 ```
 
@@ -126,6 +126,11 @@ ggplot(age_binned4, aes(age_months, percentage, color = sentiment)) +
 ggplot(age_binned4, aes(age_months, percentage, color = sentiment)) +
   geom_point(alpha = 0.7) + 
   geom_line()
+
+ggplot(age_binned4, aes(age_months, percentage, fill = sentiment)) +
+  geom_col(alpha = 0.7) +
+  facet_wrap(~sentiment)
+
 
 
 ggplot(age_binned4, aes(age_months, percentage, fill = sentiment)) +
