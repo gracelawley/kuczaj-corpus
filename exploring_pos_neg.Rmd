@@ -17,7 +17,7 @@ library(skimr)
 
 ```{r loading data}
 kuczaj_tokens <- read_csv("data/kuczaj_tokens.csv")
-kuczaj_nrc <- read_csv("data/kuczaj_nrc.csv")     
+kuczaj_nrc <- read_csv("data/new_kuczaj_nrc.csv")     
 ```
 
 

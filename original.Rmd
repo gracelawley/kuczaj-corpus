@@ -182,7 +182,6 @@ Percentage of tokens lost: `r (nrow(tokens) - nrow(kuczaj_afinn))/nrow(tokens)`
 ##!!!
 ```{r}
 nrc %>% count(sentiment) %>% arrange(n)
-
 ```
 
 
